@@ -93,7 +93,7 @@ class ScreenShareService : Service() {
                 metrics.densityDpi, DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
                 reader?.surface, null, null
             )
-            token = intent.getStringExtra(EXTRA_TOKEN) ?: run { stopSelf(); return START_NOT_STICKY }
+            token = intent?.getStringExtra(EXTRA_TOKEN) ?: run { stopSelf(); return START_NOT_STICKY }
             startServer()
         } catch (_: Exception) {
             stopSelf()
