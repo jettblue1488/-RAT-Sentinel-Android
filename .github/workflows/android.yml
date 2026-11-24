@@ -31,7 +31,6 @@ jobs:
           yes | "$SDKMANAGER" --licenses || true
           "$SDKMANAGER" --install "platform-tools" "platforms;android-35" "build-tools;35.0.0"
       - name: Configure persistent signing key
-        if: ${{ secrets.RAT_SIGNING_KEY_BASE64 != '' }}
         shell: bash
         env:
           SIGNING_KEY_BASE64: ${{ secrets.RAT_SIGNING_KEY_BASE64 }}
