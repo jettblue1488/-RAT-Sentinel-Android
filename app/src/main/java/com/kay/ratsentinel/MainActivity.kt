@@ -116,7 +116,7 @@ class MainActivity : Activity() {
         } catch (_: Exception) { emptySet<String>() }
 
         var reviewed = 0
-        var flagged = 0
+        var reviewCount = 0
         log("Android returned " + packages.size + " installed packages. Full package visibility is enabled for this sideloaded security-audit app.")
         log("Enabled accessibility packages: " + if (enabledA11y.isEmpty()) "None reported" else enabledA11y.joinToString())
         log("Active device-admin packages: " + if (activeAdmins.isEmpty()) "None reported" else activeAdmins.joinToString())
@@ -138,10 +138,10 @@ class MainActivity : Activity() {
             val hasAdmin = activeAdmins.contains(pkg)
             val installer = try {
                 if (android.os.Build.VERSION.SDK_INT >= 30) pm.getInstallSourceInfo(pkg).installingPackageName
-                else @Suppress("DEPRECATION") pm.getInstallerPackageName(pkg)
+                else pm.getInstallerPackageName(pkg)
             } catch (_: Exception) { null }
-            val flagged = granted.isNotEmpty() || hasA11y || hasAdmin
-            if (flagged) flagged++
+            val isFlagged = granted.isNotEmpty() || hasA11y || hasAdmin
+            if (isFlagged) reviewCount++
             reviewed++
             log(buildString {
                 append(label + "\nPackage: " + pkg)
@@ -150,12 +150,12 @@ class MainActivity : Activity() {
                 append("\nSensitive permissions granted: " + if (granted.isEmpty()) "None in checked list" else granted.joinToString(", "))
                 append("\nEnabled accessibility service: " + hasA11y)
                 append("\nActive device administrator: " + hasAdmin)
-                append("\nReview status: " + if (flagged) "REVIEW" else "NO CHECKED INDICATOR")
+                append("\nReview status: " + if (isFlagged) "REVIEW" else "NO CHECKED INDICATOR")
                 append("\nInterpretation: Permission or special access is an indicator to investigate, not proof of a RAT.")
             })
             addResultButton("APP INFO / PERMISSIONS / FORCE STOP / UNINSTALL • " + label) { openAppInfo(pkg) }
         }
-        log("AUDIT COMPLETE: reviewed " + reviewed + " installed packages; " + flagged + " have at least one checked permission or special-access indicator.")
+        log("AUDIT COMPLETE: reviewed " + reviewed + " installed packages; " + reviewCount + " have at least one checked permission or special-access indicator.")
         log("This is a permission/configuration audit, not signature-based malware scanning or proof an app is safe.")
         addResultButton("OPEN ACCESSIBILITY SETTINGS") { openSettings(Settings.ACTION_ACCESSIBILITY_SETTINGS) }
         addResultButton("OPEN DEVICE ADMIN SETTINGS") { openSettings(Settings.ACTION_SECURITY_SETTINGS) }
