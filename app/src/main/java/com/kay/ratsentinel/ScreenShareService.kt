@@ -23,6 +23,7 @@ class ScreenShareService : Service() {
     companion object {
         const val EXTRA_RESULT_CODE = "projection_result_code"
         const val EXTRA_RESULT_DATA = "projection_result_data"
+        const val EXTRA_TOKEN = "screen_share_token"
         const val ACTION_STOP = "com.kay.ratsentinel.STOP_SCREEN_SHARE"
         const val PORT = 8765
     }
@@ -92,7 +93,7 @@ class ScreenShareService : Service() {
                 metrics.densityDpi, DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
                 reader?.surface, null, null
             )
-            token = java.util.UUID.randomUUID().toString().replace("-", "")
+            token = intent.getStringExtra(EXTRA_TOKEN) ?: run { stopSelf(); return START_NOT_STICKY }
             startServer()
         } catch (_: Exception) {
             stopSelf()
