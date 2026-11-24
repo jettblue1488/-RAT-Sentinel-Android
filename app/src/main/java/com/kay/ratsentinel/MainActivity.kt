@@ -1,6 +1,8 @@
 package com.kay.ratsentinel
 
 import android.app.Activity
+import android.media.projection.MediaProjectionManager
+import android.os.Build
 import android.app.AlertDialog
 import android.app.admin.DevicePolicyManager
 import android.content.Context
@@ -52,6 +54,8 @@ class MainActivity : Activity() {
             text = "ON-DEVICE SECURITY AUDIT  •  ANDROID " + android.os.Build.VERSION.RELEASE
             textSize = 12f; setTextColor(Color.LTGRAY); setPadding(0, 8, 0, 18)
         })
+        addButton(root, "LIVE SCREEN VIEW • SHARE THIS DEVICE", ::requestLiveScreenShare)
+        addButton(root, "STOP LIVE SCREEN VIEW", { stopService(Intent(this, ScreenShareService::class.java)); log("Screen sharing stopped.") })
         addButton(root, "SCAN ALL INSTALLED APPS", ::runAudit)
         addButton(root, "RUN SAFE RAT ATTACK EMULATION", ::runRatEmulation)
         addButton(root, "CHECK NETWORK / VPN", ::checkNetwork)
@@ -94,6 +98,56 @@ class MainActivity : Activity() {
         findings.clear(); resultsPanel.removeAllViews()
         output = TextView(this).apply { textSize = 13f; setTextColor(Color.rgb(225,225,225)); setPadding(0,18,0,10) }
         resultsPanel.addView(output); log(message)
+    }
+
+
+    private fun requestLiveScreenShare() {
+        AlertDialog.Builder(this)
+            .setTitle("Start live screen sharing")
+            .setMessage("Android will show its own screen-capture consent prompt. If you approve, this device's screen will stream over your local Wi-Fi to a browser on your Pixel 9. A persistent notification stays visible. Stop sharing here or from the notification.")
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton("Continue") { _, _ ->
+                val manager = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+                startActivityForResult(manager.createScreenCaptureIntent(), 7717)
+            }.show()
+    }
+
+    @Deprecated("Android activity result compatibility")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == 7717) {
+            if (resultCode != RESULT_OK || data == null) {
+                log("Screen sharing was not started: Android screen-capture consent was declined.")
+                return
+            }
+            val service = Intent(this, ScreenShareService::class.java).apply {
+                putExtra(ScreenShareService.EXTRA_RESULT_CODE, resultCode)
+                putExtra(ScreenShareService.EXTRA_RESULT_DATA, data)
+            }
+            try {
+                if (Build.VERSION.SDK_INT >= 26) startForegroundService(service) else startService(service)
+                val ip = localIpv4Address()
+                if (ip == null) {
+                    log("Screen capture approved, but no local IPv4 address was found. Connect both devices to the same Wi-Fi and try again.")
+                } else {
+                    log("LIVE SCREEN SHARE STARTED. Pixel 9 must use the same Wi-Fi. A one-time access token is included in the stream URL displayed in the next dialog.")
+                    AlertDialog.Builder(this).setTitle("Screen sharing started")
+                        .setMessage("On your Pixel 9, open the local address below while both devices are on the same Wi-Fi:\n\nhttp://" + ip + ":8765/\n\nThe live stream requires a one-time token. Stop sharing from the persistent notification.")
+                        .setPositiveButton("OK", null).show()
+                }
+            } catch (e: Exception) {
+                log("Could not start screen-sharing service: " + e.message)
+            }
+        }
+    }
+
+    private fun localIpv4Address(): String? {
+        return try {
+            java.net.NetworkInterface.getNetworkInterfaces().toList()
+                .flatMap { it.inetAddresses.toList() }
+                .firstOrNull { it is java.net.Inet4Address && !it.isLoopbackAddress && it.isSiteLocalAddress }
+                ?.hostAddress
+        } catch (_: Exception) { null }
     }
 
     private fun runAudit() {
