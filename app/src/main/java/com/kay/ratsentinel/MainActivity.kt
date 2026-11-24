@@ -2,6 +2,7 @@ package com.kay.ratsentinel
 
 import android.app.Activity
 import android.app.AlertDialog
+import android.app.admin.DevicePolicyManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -10,8 +11,8 @@ import android.net.NetworkCapabilities
 import android.net.Uri
 import android.os.Bundle
 import android.provider.Settings
+import android.provider.Settings.Secure
 import android.graphics.Typeface
-import android.view.Gravity
 import android.widget.*
 import android.graphics.Color
 import java.text.SimpleDateFormat
@@ -20,17 +21,18 @@ import java.util.Locale
 
 class MainActivity : Activity() {
     private lateinit var output: TextView
-    private lateinit var status: TextView
     private lateinit var resultsPanel: LinearLayout
     private val findings = mutableListOf<String>()
-
     private val sensitivePermissions = linkedMapOf(
         "Camera" to android.Manifest.permission.CAMERA,
         "Microphone" to android.Manifest.permission.RECORD_AUDIO,
         "Precise location" to android.Manifest.permission.ACCESS_FINE_LOCATION,
+        "Background location" to android.Manifest.permission.ACCESS_BACKGROUND_LOCATION,
         "Contacts" to android.Manifest.permission.READ_CONTACTS,
         "SMS" to android.Manifest.permission.READ_SMS,
-        "Call history" to android.Manifest.permission.READ_CALL_LOG
+        "Call history" to android.Manifest.permission.READ_CALL_LOG,
+        "Phone state" to android.Manifest.permission.READ_PHONE_STATE,
+        "Nearby devices" to android.Manifest.permission.BLUETOOTH_CONNECT
     )
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -42,214 +44,183 @@ class MainActivity : Activity() {
             setPadding(22, 26, 22, 20)
             setBackgroundColor(Color.rgb(13, 13, 16))
         }
-        val title = TextView(this).apply {
-            text = "RAT SENTINEL"
-            textSize = 26f
-            setTextColor(Color.rgb(255, 65, 65))
-            typeface = Typeface.DEFAULT_BOLD
-        }
-        status = TextView(this).apply {
-            text = "LOCAL DEVICE SECURITY LAB  •  READY"
-            textSize = 12f
-            setTextColor(Color.LTGRAY)
-            setPadding(0, 8, 0, 18)
-        }
-        root.addView(title); root.addView(status)
-        addButton(root, "RUN DEVICE AUDIT", ::runAudit)
+        root.addView(TextView(this).apply {
+            text = "RAT SENTINEL"; textSize = 26f
+            setTextColor(Color.rgb(255, 65, 65)); typeface = Typeface.DEFAULT_BOLD
+        })
+        root.addView(TextView(this).apply {
+            text = "ON-DEVICE SECURITY AUDIT  •  ANDROID " + android.os.Build.VERSION.RELEASE
+            textSize = 12f; setTextColor(Color.LTGRAY); setPadding(0, 8, 0, 18)
+        })
+        addButton(root, "SCAN ALL INSTALLED APPS", ::runAudit)
+        addButton(root, "RUN SAFE RAT ATTACK EMULATION", ::runRatEmulation)
         addButton(root, "CHECK NETWORK / VPN", ::checkNetwork)
-        addButton(root, "SIMULATION LAB", ::runSimulation)
         addButton(root, "REVIEW ACCESSIBILITY SERVICES", { openSettings(Settings.ACTION_ACCESSIBILITY_SETTINGS) })
         addButton(root, "REVIEW DEVICE ADMIN APPS", { openSettings(Settings.ACTION_SECURITY_SETTINGS) })
-        addButton(root, "APP PERMISSION SETTINGS", { openSettings(Settings.ACTION_MANAGE_APPLICATIONS_SETTINGS) })
+        addButton(root, "OPEN ANDROID APP PERMISSIONS", { openSettings(Settings.ACTION_MANAGE_APPLICATIONS_SETTINGS) })
         addButton(root, "EXPLAIN SCAN RESULTS", ::showScanGuide)
         addButton(root, "EXPORT INCIDENT LOG", ::exportLog)
         resultsPanel = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         output = TextView(this).apply {
-            text = "No audit has run yet.\n\nRun an audit or open the Simulation Lab. Findings are indicators, not proof of infection. Use an app's App info button to review permissions, force-stop it, or uninstall it where Android allows."
-            textSize = 13f
-            setTextColor(Color.rgb(225,225,225))
-            setPadding(0, 18, 0, 10)
+            text = "Run a full installed-app audit or safe RAT emulation. Real app results include direct Android App Info controls."
+            textSize = 13f; setTextColor(Color.rgb(225,225,225)); setPadding(0, 18, 0, 10)
         }
         resultsPanel.addView(output)
-        val scroll = ScrollView(this).apply { addView(resultsPanel) }
-        root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
+        root.addView(ScrollView(this).apply { addView(resultsPanel) }, LinearLayout.LayoutParams(-1, 0, 1f))
         setContentView(root)
     }
 
     private fun addButton(parent: LinearLayout, label: String, action: () -> Unit) {
-        val b = Button(this).apply {
-            text = label
-            setTextColor(Color.WHITE)
-            setBackgroundColor(Color.rgb(120, 12, 20))
-            isAllCaps = false
-            setOnClickListener { action() }
-        }
-        val lp = LinearLayout.LayoutParams(-1, -2); lp.bottomMargin = 7
-        parent.addView(b, lp)
+        parent.addView(Button(this).apply {
+            text = label; setTextColor(Color.WHITE); setBackgroundColor(Color.rgb(120, 12, 20))
+            isAllCaps = false; setOnClickListener { action() }
+        }, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = 7 })
     }
 
     private fun addResultButton(label: String, action: () -> Unit) {
-        val b = Button(this).apply {
-            text = label
-            isAllCaps = false
-            setTextColor(Color.WHITE)
-            setBackgroundColor(Color.rgb(75, 22, 28))
-            setOnClickListener { action() }
-        }
-        val lp = LinearLayout.LayoutParams(-1, -2)
-        lp.topMargin = 4
-        resultsPanel.addView(b, lp)
+        resultsPanel.addView(Button(this).apply {
+            text = label; isAllCaps = false; setTextColor(Color.WHITE)
+            setBackgroundColor(Color.rgb(75, 22, 28)); setOnClickListener { action() }
+        }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = 4 })
     }
 
     private fun stamp() = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date())
     private fun log(s: String) {
-        findings.add("[${stamp()}] $s")
-        output.text = findings.takeLast(150).joinToString("\n\n")
+        findings.add("[" + stamp() + "] " + s)
+        output.text = findings.takeLast(300).joinToString("\n\n")
     }
 
     private fun resetResults(message: String) {
-        findings.clear()
-        resultsPanel.removeAllViews()
-        output = TextView(this).apply {
-            textSize = 13f
-            setTextColor(Color.rgb(225,225,225))
-            setPadding(0, 18, 0, 10)
-        }
-        resultsPanel.addView(output)
-        log(message)
+        findings.clear(); resultsPanel.removeAllViews()
+        output = TextView(this).apply { textSize = 13f; setTextColor(Color.rgb(225,225,225)); setPadding(0,18,0,10) }
+        resultsPanel.addView(output); log(message)
     }
 
     private fun runAudit() {
-        resetResults("DEVICE AUDIT • ${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL} • Android ${android.os.Build.VERSION.RELEASE}")
+        resetResults("FULL INSTALLED-APP AUDIT • " + android.os.Build.MANUFACTURER + " " + android.os.Build.MODEL + " • Android " + android.os.Build.VERSION.RELEASE)
         val pm = packageManager
-        val launcherIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
-        val apps = pm.queryIntentActivities(launcherIntent, 0)
-            .distinctBy { it.activityInfo.packageName }
-            .sortedBy { it.loadLabel(pm).toString().lowercase() }
+        val packages = try {
+            pm.getInstalledPackages(PackageManager.GET_PERMISSIONS)
+                .filter { it.packageName != packageName }
+                .sortedBy { it.applicationInfo?.loadLabel(pm)?.toString()?.lowercase(Locale.ROOT) ?: it.packageName }
+        } catch (e: Exception) { log("Could not enumerate installed packages: " + e.message); return }
+
+        val activeAdmins = try {
+            val dpm = getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+            dpm.activeAdmins?.map { it.packageName }?.toSet() ?: emptySet()
+        } catch (_: Exception) { emptySet<String>() }
+
+        val enabledA11y = try {
+            Secure.getString(contentResolver, Secure.ENABLED_ACCESSIBILITY_SERVICES)
+                ?.split(':')?.mapNotNull { it.substringBefore('/').takeIf { p -> p.isNotBlank() } }?.toSet() ?: emptySet()
+        } catch (_: Exception) { emptySet<String>() }
+
         var reviewed = 0
         var flagged = 0
-        log("Found ${apps.size} launcher-visible apps. Android hides some packages from ordinary apps, so this is not a complete malware scan.")
-        for (resolve in apps) {
-            val ai = resolve.activityInfo.applicationInfo
-            val pkg = ai.packageName
-            val label = resolve.loadLabel(pm).toString()
+        log("Android returned " + packages.size + " installed packages. Full package visibility is enabled for this sideloaded security-audit app.")
+        log("Enabled accessibility packages: " + if (enabledA11y.isEmpty()) "None reported" else enabledA11y.joinToString())
+        log("Active device-admin packages: " + if (activeAdmins.isEmpty()) "None reported" else activeAdmins.joinToString())
+
+        for (pkgInfo in packages) {
+            val ai = pkgInfo.applicationInfo ?: continue
+            val pkg = pkgInfo.packageName
+            val label = try { ai.loadLabel(pm).toString() } catch (_: Exception) { pkg }
             val isSystem = (ai.flags and android.content.pm.ApplicationInfo.FLAG_SYSTEM) != 0
-            val pkgInfo = try { pm.getPackageInfo(pkg, PackageManager.GET_PERMISSIONS) } catch (_: Exception) { null }
-            val requested = pkgInfo?.requestedPermissions ?: emptyArray()
-            val grantedSensitive = sensitivePermissions.filter { (_, permission) ->
-                requested.contains(permission) && pm.checkPermission(permission, pkg) == PackageManager.PERMISSION_GRANTED
-            }.keys.toList()
-            reviewed++
-            val attention = grantedSensitive.isNotEmpty() && !isSystem
-            if (attention) flagged++
-            val classification = if (attention) "REVIEW" else "NO OBVIOUS FLAG"
-            val details = buildString {
-                append("$label\nPackage: $pkg\nType: ${if (isSystem) "System / preinstalled" else "User-installed"}\nResult: $classification")
-                append("\nSensitive permissions granted: ${if (grantedSensitive.isEmpty()) "None detected from checked list" else grantedSensitive.joinToString(", ")}")
-                append("\nMeaning: ${if (attention) "A sensitive permission is granted. This can be legitimate; compare it with the app's purpose." else "No checked sensitive permission was found granted. This does not prove the app is safe."}")
+            val requested = pkgInfo.requestedPermissions ?: emptyArray()
+            val granted = mutableListOf<String>()
+            requested.forEachIndexed { index, permission ->
+                val flags = pkgInfo.requestedPermissionsFlags?.getOrNull(index) ?: 0
+                if ((flags and PackageManager.REQUESTED_PERMISSION_GRANTED) != 0) {
+                    sensitivePermissions.entries.firstOrNull { it.value == permission }?.let { granted.add(it.key) }
+                }
             }
-            log(details)
-            addResultButton("APP INFO / FORCE STOP / UNINSTALL • $label") { openAppInfo(pkg) }
+            val hasA11y = enabledA11y.contains(pkg)
+            val hasAdmin = activeAdmins.contains(pkg)
+            val installer = try {
+                if (android.os.Build.VERSION.SDK_INT >= 30) pm.getInstallSourceInfo(pkg).installingPackageName
+                else @Suppress("DEPRECATION") pm.getInstallerPackageName(pkg)
+            } catch (_: Exception) { null }
+            val flagged = granted.isNotEmpty() || hasA11y || hasAdmin
+            if (flagged) flagged++
+            reviewed++
+            log(buildString {
+                append(label + "\nPackage: " + pkg)
+                append("\nType: " + if (isSystem) "System / preinstalled" else "User-installed")
+                append("\nInstaller: " + (installer ?: "Unknown / preloaded"))
+                append("\nSensitive permissions granted: " + if (granted.isEmpty()) "None in checked list" else granted.joinToString(", "))
+                append("\nEnabled accessibility service: " + hasA11y)
+                append("\nActive device administrator: " + hasAdmin)
+                append("\nReview status: " + if (flagged) "REVIEW" else "NO CHECKED INDICATOR")
+                append("\nInterpretation: Permission or special access is an indicator to investigate, not proof of a RAT.")
+            })
+            addResultButton("APP INFO / PERMISSIONS / FORCE STOP / UNINSTALL • " + label) { openAppInfo(pkg) }
         }
-        log("SUMMARY: reviewed $reviewed launcher-visible apps; $flagged user-installed app(s) have at least one checked sensitive permission granted.")
-        log("This is a permission review, not a malware verdict. A flag means investigate purpose, developer, install source and behavior before taking action.")
-        addResultButton("OPEN ANDROID APP MANAGEMENT") { openSettings(Settings.ACTION_MANAGE_APPLICATIONS_SETTINGS) }
-        addResultButton("REVIEW ACCESSIBILITY SERVICES") { openSettings(Settings.ACTION_ACCESSIBILITY_SETTINGS) }
-        addResultButton("REVIEW DEVICE ADMIN APPS") { openSettings(Settings.ACTION_SECURITY_SETTINGS) }
+        log("AUDIT COMPLETE: reviewed " + reviewed + " installed packages; " + flagged + " have at least one checked permission or special-access indicator.")
+        log("This is a permission/configuration audit, not signature-based malware scanning or proof an app is safe.")
+        addResultButton("OPEN ACCESSIBILITY SETTINGS") { openSettings(Settings.ACTION_ACCESSIBILITY_SETTINGS) }
+        addResultButton("OPEN DEVICE ADMIN SETTINGS") { openSettings(Settings.ACTION_SECURITY_SETTINGS) }
     }
 
     private fun openAppInfo(packageName: String) {
         try {
-            val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName"))
-            startActivity(intent)
-            log("Opened App info for $packageName. Android provides the available Force stop, Uninstall, Disable and Permissions controls there.")
-        } catch (e: Exception) {
-            log("Could not open App info for $packageName: ${e.message}")
+            startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + packageName)))
+            log("Opened Android App info for " + packageName + ". Use Permissions, Force stop, Disable (if available), or Uninstall.")
+        } catch (e: Exception) { log("Could not open App info for " + packageName + ": " + e.message) }
+    }
+
+    private fun runRatEmulation() {
+        resetResults("SAFE RAT BEHAVIOR EMULATION • LOCAL DEVICE")
+        log("Runs only inside RAT Sentinel. It does not install malware, contact a command server, access sensors, read messages, collect files, hide itself, or persist.")
+        val events = listOf(
+            "Simulated command-and-control heartbeat to a reserved local test address",
+            "Simulated remote command queued: INVENTORY_APPS",
+            "Simulated microphone access request without user action",
+            "Simulated attempt to enable an accessibility service",
+            "Simulated outbound data-transfer burst"
+        )
+        val detections = listOf(
+            "NETWORK BEACON PATTERN",
+            "REMOTE COMMAND QUEUE PATTERN",
+            "SENSITIVE SENSOR ACCESS PATTERN",
+            "PRIVILEGED ACCESS / ACCESSIBILITY PATTERN",
+            "POSSIBLE DATA EXFILTRATION PATTERN"
+        )
+        events.forEachIndexed { i, event ->
+            log("TEST EVENT: " + event)
+            log("LOCAL TEST RULE FIRED: " + detections[i])
         }
+        log("EMULATION RESULT: " + detections.size + " of " + events.size + " known simulated indicators matched.")
+        log("This validates only the in-app demonstration rules. It does not prove Android observed real malware behavior. Use the real installed-app audit and live network check for device state.")
+        addResultButton("RUN REAL INSTALLED-APP AUDIT") { runAudit() }
+        addResultButton("CHECK REAL NETWORK / VPN STATE") { checkNetwork() }
     }
 
     private fun checkNetwork() {
         val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-        val n = cm.activeNetwork
-        val caps = n?.let { cm.getNetworkCapabilities(it) }
-        resetResults("NETWORK / VPN CHECK")
-        log("Connected=${caps != null}; Wi-Fi=${caps?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true}; Cellular=${caps?.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) == true}; VPN=${caps?.hasTransport(NetworkCapabilities.TRANSPORT_VPN) == true}.")
-        log("Meaning: VPN=true only says a VPN transport is active. It does not identify which app owns it or prove spying. Check Android Settings > Network & internet > VPN and verify the provider and always-on setting.")
+        val caps = cm.activeNetwork?.let { cm.getNetworkCapabilities(it) }
+        resetResults("LIVE NETWORK / VPN CHECK")
+        log("Connected=" + (caps != null) + "; Wi-Fi=" + (caps?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true) +
+            "; Cellular=" + (caps?.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) == true) +
+            "; VPN=" + (caps?.hasTransport(NetworkCapabilities.TRANSPORT_VPN) == true))
+        log("VPN=true means Android reports an active VPN transport. It does not identify the owning app or prove spying.")
         addResultButton("OPEN VPN SETTINGS") { openSettings(Settings.ACTION_VPN_SETTINGS) }
     }
 
-    private fun runSimulation() {
-        val scenarios = arrayOf(
-            "Suspicious app with microphone permission",
-            "Unexpected accessibility service",
-            "Unexpected VPN connection",
-            "Normal app with location permission"
-        )
-        AlertDialog.Builder(this)
-            .setTitle("Choose a safe training scenario")
-            .setItems(scenarios) { _, which -> showScenario(which, scenarios[which]) }
-            .setNegativeButton("Cancel", null)
-            .show()
-    }
-
-    private fun showScenario(which: Int, name: String) {
-        resetResults("SIMULATION LAB • $name")
-        when (which) {
-            0 -> {
-                log("SIMULATED EVIDENCE: An unfamiliar flashlight app has microphone permission granted.")
-                log("SEVERITY: MEDIUM • REVIEW REQUIRED, not confirmed malware.")
-                log("WHY IT MATTERS: Microphone access is sensitive and is not normally needed for a basic flashlight.")
-                log("WHAT TO DO: Verify the app publisher and install source. If you do not trust it, open App info, Force stop, then Uninstall. Revoke microphone permission first if keeping it.")
-                addResultButton("OPEN APP PERMISSION SETTINGS") { openSettings(Settings.ACTION_MANAGE_APPLICATIONS_SETTINGS) }
-            }
-            1 -> {
-                log("SIMULATED EVIDENCE: An unknown service appears in Accessibility settings.")
-                log("SEVERITY: HIGH • INVESTIGATE PROMPTLY. Accessibility access can observe screen content and perform actions.")
-                log("WHAT TO DO: In Accessibility settings, turn off the service if you did not knowingly enable it. Then open the app's App info and uninstall it if untrusted.")
-                addResultButton("OPEN ACCESSIBILITY SETTINGS") { openSettings(Settings.ACTION_ACCESSIBILITY_SETTINGS) }
-            }
-            2 -> {
-                log("SIMULATED EVIDENCE: Android reports an active VPN, but the provider is not yet verified.")
-                log("SEVERITY: LOW TO MEDIUM • VERIFY THE PROVIDER. A VPN is not automatically malicious.")
-                log("WHAT TO DO: Check the VPN name, app publisher, always-on VPN and whether you installed it. Disconnect or remove only if you do not recognize it.")
-                addResultButton("OPEN VPN SETTINGS") { openSettings(Settings.ACTION_VPN_SETTINGS) }
-            }
-            else -> {
-                log("SIMULATED EVIDENCE: A map app has location permission granted.")
-                log("SEVERITY: INFO • EXPECTED FOR MANY MAP APPS.")
-                log("WHY IT MATTERS: Permission context matters. Location access is reasonable for navigation, but review whether it is allowed all the time or only while in use.")
-                log("WHAT TO DO: Keep or change the permission based on the app's purpose and your preference.")
-                addResultButton("OPEN APP PERMISSION SETTINGS") { openSettings(Settings.ACTION_MANAGE_APPLICATIONS_SETTINGS) }
-            }
-        }
-        log("TRAINING ONLY: No real app was scanned, stopped, changed or uninstalled. These are example findings to teach interpretation and response.")
-        addResultButton("RUN A REAL DEVICE AUDIT") { runAudit() }
-    }
-
     private fun showScanGuide() {
-        AlertDialog.Builder(this)
-            .setTitle("How to read RAT Sentinel results")
-            .setMessage(
-                "NO OBVIOUS FLAG: None of the small set of checked sensitive permissions was found granted. This is not a clean bill of health.\n\n" +
-                "REVIEW: A user-installed launcher app has one or more checked sensitive permissions granted. That can be legitimate. Compare the permission with what the app does.\n\n" +
-                "HIGH RISK ACCESS: Accessibility or device-admin access can give an app powerful control. Only keep services you recognize and intentionally enabled.\n\n" +
-                "VPN ACTIVE: Indicates a VPN transport, not malware. Verify the VPN app/provider in Android settings.\n\n" +
-                "ACTION: App info opens Android's own controls. Depending on the app and device, you may Force stop, Uninstall, Disable or change permissions. System apps may not be uninstallable. RAT Sentinel cannot silently kill or uninstall another app; Android requires system/user controls.\n\n" +
-                "LIMITS: This app does not inspect private app data, scan every installed package, detect every RAT, or guarantee device cleanliness."
-            )
-            .setPositiveButton("Got it", null)
-            .show()
+        AlertDialog.Builder(this).setTitle("How to read RAT Sentinel")
+            .setMessage("INSTALLED-APP AUDIT: Reads the installed package list and granted state for selected sensitive permissions. It also reports enabled accessibility services and active device administrators where Android exposes them.\n\nREVIEW: A permission or special access exists. It may be legitimate. Check app purpose, publisher and installer.\n\nAPP INFO: Opens Android's controls. You can review/revoke permissions, Force stop, Disable if offered, or Uninstall. Android controls the final action.\n\nSAFE RAT EMULATION: Runs harmless simulated indicators inside this app. It does not attack Android or other apps.\n\nLIMITS: This is not a commercial malware scanner. It does not inspect private app data, instrument other processes, or guarantee detection of every RAT.")
+            .setPositiveButton("Got it", null).show()
     }
 
     private fun openSettings(action: String) {
-        try { startActivity(Intent(action)); log("Opened Android settings: $action") }
-        catch (e: Exception) { log("Could not open settings page: ${e.message}") }
+        try { startActivity(Intent(action)); log("Opened Android settings: " + action) }
+        catch (e: Exception) { log("Could not open settings page: " + e.message) }
     }
 
     private fun exportLog() {
-        val text = findings.joinToString("\n\n")
         val send = Intent(Intent.ACTION_SEND).apply {
-            type = "text/plain"; putExtra(Intent.EXTRA_SUBJECT, "RAT Sentinel incident log"); putExtra(Intent.EXTRA_TEXT, text)
+            type = "text/plain"; putExtra(Intent.EXTRA_SUBJECT, "RAT Sentinel incident log")
+            putExtra(Intent.EXTRA_TEXT, findings.joinToString("\n\n"))
         }
         startActivity(Intent.createChooser(send, "Export incident log"))
     }
