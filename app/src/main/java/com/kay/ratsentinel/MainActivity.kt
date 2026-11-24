@@ -130,7 +130,7 @@ class MainActivity : Activity() {
             val granted = mutableListOf<String>()
             requested.forEachIndexed { index, permission ->
                 val flags = pkgInfo.requestedPermissionsFlags?.getOrNull(index) ?: 0
-                if ((flags and PackageManager.REQUESTED_PERMISSION_GRANTED) != 0) {
+                if ((flags and android.content.pm.PackageInfo.REQUESTED_PERMISSION_GRANTED) != 0) {
                     sensitivePermissions.entries.firstOrNull { it.value == permission }?.let { granted.add(it.key) }
                 }
             }
