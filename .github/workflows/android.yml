@@ -28,7 +28,7 @@ jobs:
             find "$ANDROID_HOME" -maxdepth 4 -type f -name sdkmanager || true
             exit 1
           fi
-          yes | "$SDKMANAGER" --licenses
+          yes | "$SDKMANAGER" --licenses || true
           "$SDKMANAGER" --install "platform-tools" "platforms;android-35" "build-tools;35.0.0"
       - name: Build debug APK
         run: |
