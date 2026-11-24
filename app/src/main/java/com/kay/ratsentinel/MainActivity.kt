@@ -120,9 +120,11 @@ class MainActivity : Activity() {
                 log("Screen sharing was not started: Android screen-capture consent was declined.")
                 return
             }
+            val accessToken = java.util.UUID.randomUUID().toString().replace("-", "")
             val service = Intent(this, ScreenShareService::class.java).apply {
                 putExtra(ScreenShareService.EXTRA_RESULT_CODE, resultCode)
                 putExtra(ScreenShareService.EXTRA_RESULT_DATA, data)
+                putExtra(ScreenShareService.EXTRA_TOKEN, accessToken)
             }
             try {
                 if (Build.VERSION.SDK_INT >= 26) startForegroundService(service) else startService(service)
