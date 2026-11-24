@@ -30,11 +30,35 @@ jobs:
           fi
           yes | "$SDKMANAGER" --licenses || true
           "$SDKMANAGER" --install "platform-tools" "platforms;android-35" "build-tools;35.0.0"
-      - name: Build debug APK
+      - name: Configure persistent signing key
+        if: ${{ secrets.RAT_SIGNING_KEY_BASE64 != '' }}
+        shell: bash
+        env:
+          SIGNING_KEY_BASE64: ${{ secrets.RAT_SIGNING_KEY_BASE64 }}
+          SIGNING_STORE_PASSWORD: ${{ secrets.RAT_SIGNING_STORE_PASSWORD }}
+          SIGNING_KEY_ALIAS: ${{ secrets.RAT_SIGNING_KEY_ALIAS }}
+          SIGNING_KEY_PASSWORD: ${{ secrets.RAT_SIGNING_KEY_PASSWORD }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/rat-signing"
+          echo "$SIGNING_KEY_BASE64" | base64 --decode > "$RUNNER_TEMP/rat-signing/release.jks"
+          echo "RAT_SIGNING_STORE_FILE=$RUNNER_TEMP/rat-signing/release.jks" >> "$GITHUB_ENV"
+          echo "RAT_SIGNING_STORE_PASSWORD=$SIGNING_STORE_PASSWORD" >> "$GITHUB_ENV"
+          echo "RAT_SIGNING_KEY_ALIAS=$SIGNING_KEY_ALIAS" >> "$GITHUB_ENV"
+          echo "RAT_SIGNING_KEY_PASSWORD=$SIGNING_KEY_PASSWORD" >> "$GITHUB_ENV"
+      - name: Build APK
         run: |
           gradle --version
-          gradle :app:assembleDebug --stacktrace
-      - uses: actions/upload-artifact@v4
+          if [ -n "${RAT_SIGNING_STORE_FILE:-}" ]; then
+            gradle :app:assembleRelease --stacktrace
+          else
+            echo "Persistent signing secrets are not configured; building a temporary debug APK."
+            gradle :app:assembleDebug --stacktrace
+          fi
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
         with:
-          name: RAT-Sentinel-debug
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: RAT-Sentinel-install
+          path: |
+            app/build/outputs/apk/release/app-release.apk
+            app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
